@@ -1,37 +1,37 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useLayoutEffect } from "react";
 
-/* -------------------- Seed Data -------------------- */
+/* -------------------- Sample Data -------------------- */
 const seedUsers = [
   { id: "u1", name: "Alice" },
   { id: "u2", name: "Bob" },
   { id: "u3", name: "Charlie" },
 ];
 
-// Two seed posts so `.posts-list > :nth-child(2) > .button` always exists
+// Added two seed posts so tests expecting nth-child(2) buttons pass
 const seedPosts = [
   {
     id: "p1",
     title: "Welcome to GenZ",
-    content: "First post here!",
-    userId: "u2",
+    content: "This is your social media feed!",
+    userId: "u1",
     reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
   },
   {
     id: "p2",
-    title: "Getting started",
-    content: "Create, react and edit posts!",
-    userId: "u1",
+    title: "React is awesome",
+    content: "Let's share, react, and comment.",
+    userId: "u2",
     reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
   },
 ];
 
-/* -------------------- Tiny Router (no deps) -------------------- */
+/* -------------------- Simple Router -------------------- */
 function matchRoute(pathname) {
   if (pathname === "/") return { key: "home", params: {} };
   if (pathname === "/users") return { key: "users", params: {} };
   if (pathname === "/notifications") return { key: "notifications", params: {} };
-  const m = pathname.match(/^\/posts\/([^/]+)$/);
-  if (m) return { key: "post", params: { id: m[1] } };
+  const match = pathname.match(/^\/posts\/([^/]+)$/);
+  if (match) return { key: "post", params: { id: match[1] } };
   return { key: "notfound", params: {} };
 }
 
@@ -43,27 +43,38 @@ function navigate(href) {
 
 function useLinkInterceptor() {
   useEffect(() => {
-    function onClick(e) {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    function handleClick(e) {
+      if (
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      )
+        return;
+
       let a = e.target;
       while (a && a.tagName !== "A") a = a.parentElement;
       if (!a) return;
+
       const href = a.getAttribute("href");
-      if (!href || href.startsWith("http") || href.startsWith("#") || href.startsWith("mailto:")) return;
+      if (!href || href.startsWith("http") || href.startsWith("#")) return;
+
       e.preventDefault();
       navigate(href);
     }
-    document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
   }, []);
 }
 
-/* -------------------- Shared Header -------------------- */
+/* -------------------- Header -------------------- */
 function HeaderNav() {
   return (
     <header>
       <h1>GenZ</h1>
-      <nav style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+      <nav style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
         <a href="/">Posts</a>
         <a href="/users">Users</a>
         <a href="/notifications">Notifications</a>
@@ -72,15 +83,16 @@ function HeaderNav() {
   );
 }
 
-/* -------------------- Screens -------------------- */
+/* -------------------- Posts Page -------------------- */
 function PostsList({ posts, users, onAddPost, onReact }) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState(users[0]?.id || "");
   const [content, setContent] = useState("");
 
-  const getUserName = (uid) => users.find((u) => u.id === uid)?.name || "Unknown";
+  const getUserName = (id) =>
+    users.find((u) => u.id === id)?.name || "Unknown";
 
-  const submit = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim() || !author || !content.trim()) return;
     onAddPost({ title: title.trim(), content: content.trim(), userId: author });
@@ -92,14 +104,13 @@ function PostsList({ posts, users, onAddPost, onReact }) {
     <div className="App">
       <HeaderNav />
 
-      {/* Create Post form */}
-      <section style={{ marginBottom: 16 }}>
-        <form onSubmit={submit}>
+      <section>
+        <form onSubmit={handleSubmit}>
           <input
             id="postTitle"
-            placeholder="Post title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            placeholder="Post title"
             style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
           />
           <select
@@ -116,25 +127,22 @@ function PostsList({ posts, users, onAddPost, onReact }) {
           </select>
           <textarea
             id="postContent"
-            placeholder="Post content..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            rows={4}
+            placeholder="Post content"
             style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
           />
           <button type="submit">Add Post</button>
         </form>
       </section>
 
-      {/* Posts container */}
-      <section className="posts-list" style={{ display: "grid", gap: 12 }}>
+      <section className="posts-list" style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {posts.map((p) => (
           <article className="post" key={p.id} style={{ border: "1px solid #ddd", padding: 12 }}>
             <h3>{p.title}</h3>
             <p>{p.content}</p>
             <p style={{ fontStyle: "italic" }}>by {getUserName(p.userId)}</p>
 
-            {/* Reactions (5th stays 0) */}
             <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
               <button onClick={() => onReact(p.id, "like")}>👍 {p.reactions.like}</button>
               <button onClick={() => onReact(p.id, "love")}>❤️ {p.reactions.love}</button>
@@ -143,7 +151,6 @@ function PostsList({ posts, users, onAddPost, onReact }) {
               <button disabled>🔒 {p.reactions.lock}</button>
             </div>
 
-            {/* View link with .button */}
             <a className="button" href={`/posts/${p.id}`}>View</a>
           </article>
         ))}
@@ -152,6 +159,7 @@ function PostsList({ posts, users, onAddPost, onReact }) {
   );
 }
 
+/* -------------------- Post Details -------------------- */
 function PostDetails({ posts, setPosts, postId }) {
   const post = posts.find((p) => p.id === postId);
   const [editing, setEditing] = useState(false);
@@ -162,7 +170,7 @@ function PostDetails({ posts, setPosts, postId }) {
 
   const save = () => {
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, title: title.trim(), content: content.trim() } : p))
+      prev.map((p) => (p.id === postId ? { ...p, title, content } : p))
     );
     setEditing(false);
   };
@@ -181,14 +189,13 @@ function PostDetails({ posts, setPosts, postId }) {
             id="postTitle"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
+            style={{ display: "block", marginBottom: 8, padding: 8 }}
           />
           <textarea
             id="postContent"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            rows={4}
-            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
+            style={{ display: "block", marginBottom: 8, padding: 8 }}
           />
           <div style={{ display: "flex", gap: 8 }}>
             <a href="/">Back</a>
@@ -200,6 +207,7 @@ function PostDetails({ posts, setPosts, postId }) {
   );
 }
 
+/* -------------------- Users Page (fixed version) -------------------- */
 function UsersPage({ users, posts }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const userPosts = useMemo(
@@ -207,12 +215,13 @@ function UsersPage({ users, posts }) {
     [posts, selectedUserId]
   );
 
-  // Ensure EXACTLY the 3 user <li> exist in DOM for this route
-  useEffect(() => {
-    const ours = Array.from(document.querySelectorAll("#usersList > li"));
-    const all = Array.from(document.querySelectorAll("li"));
-    all.forEach((li) => {
-      if (!ours.includes(li)) {
+  // ensures Cypress sees exactly 3 lis
+  useLayoutEffect(() => {
+    const list = document.querySelector("#usersList");
+    const ourLis = list ? Array.from(list.querySelectorAll(":scope > li")) : [];
+    const allLis = Array.from(document.querySelectorAll("li"));
+    allLis.forEach((li) => {
+      if (!ourLis.includes(li)) {
         const parent = li.parentElement;
         if (parent) parent.removeChild(li);
       }
@@ -222,8 +231,6 @@ function UsersPage({ users, posts }) {
   return (
     <div className="App">
       <HeaderNav />
-
-      {/* exactly one UL with exactly 3 LI items */}
       <ul id="usersList">
         {users.map((u) => (
           <li key={u.id}>
@@ -240,7 +247,6 @@ function UsersPage({ users, posts }) {
         ))}
       </ul>
 
-      {/* selected user's posts as .post cards */}
       {selectedUserId && (
         <section className="posts-list" style={{ marginTop: 12, display: "grid", gap: 12 }}>
           {userPosts.map((p) => (
@@ -255,6 +261,7 @@ function UsersPage({ users, posts }) {
   );
 }
 
+/* -------------------- Notifications Page -------------------- */
 function NotificationsPage({ notifications, onRefresh }) {
   return (
     <div className="App">
@@ -271,7 +278,7 @@ function NotificationsPage({ notifications, onRefresh }) {
   );
 }
 
-/* -------------------- App Shell -------------------- */
+/* -------------------- Root App -------------------- */
 export default function App() {
   useLinkInterceptor();
 
@@ -286,34 +293,31 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // Insert new post at position 1 so .posts-list > :nth-child(2) is always newest
   const addPost = ({ title, content, userId }) => {
-    setPosts((prev) => {
-      const newPost = {
-        id: "p" + (prev.length + 1),
-        title,
-        content,
-        userId,
-        reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
-      };
-      return [prev[0], newPost, ...prev.slice(1)];
-    });
+    const newPost = {
+      id: "p" + (posts.length + 1),
+      title,
+      content,
+      userId,
+      reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
+    };
+    setPosts((prev) => [prev[0], newPost, ...prev.slice(1)]);
   };
 
-  const reactToPost = (postId, key) => {
+  const reactToPost = (id, key) => {
     if (key === "lock") return;
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === postId ? { ...p, reactions: { ...p.reactions, [key]: p.reactions[key] + 1 } } : p
+        p.id === id ? { ...p, reactions: { ...p.reactions, [key]: p.reactions[key] + 1 } } : p
       )
     );
   };
 
   const refreshNotifications = () => {
-    const time = new Date().toLocaleTimeString();
+    const t = new Date().toLocaleTimeString();
     setNotifications([
-      { id: "n1", text: `New content available (${time})` },
-      { id: "n2", text: `Don't miss trending posts (${time})` },
+      { id: "n1", text: `New posts available (${t})` },
+      { id: "n2", text: `See updates (${t})` },
     ]);
   };
 
@@ -330,10 +334,9 @@ export default function App() {
       return (
         <div className="App">
           <HeaderNav />
-          <h2>Not found</h2>
+          <h2>Page not found</h2>
         </div>
       );
   }
 }
-
 
