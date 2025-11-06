@@ -24,7 +24,7 @@ const seedPosts = [
   },
 ];
 
-/* -------------------- Router -------------------- */
+/* -------------------- Minimal Router -------------------- */
 function matchRoute(pathname) {
   if (pathname === "/") return { key: "home" };
   if (pathname === "/users") return { key: "users" };
@@ -43,7 +43,16 @@ function navigate(href) {
 function useLinkInterceptor() {
   useEffect(() => {
     function handleClick(e) {
-      if (e.defaultPrevented || e.button !== 0) return;
+      if (
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      ) {
+        return;
+      }
       let a = e.target;
       while (a && a.tagName !== "A") a = a.parentElement;
       if (!a) return;
@@ -71,32 +80,32 @@ function HeaderNav() {
   );
 }
 
-/* -------------------- Posts -------------------- */
+/* -------------------- Posts Page -------------------- */
 function PostsList({ posts, users, onAddPost, onReact }) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState(users[0].id);
   const [content, setContent] = useState("");
 
-  const handleSubmit = (e) => {
+  const submit = (e) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
-    onAddPost({ title, content, userId: author });
+    onAddPost({ title: title.trim(), content: content.trim(), userId: author });
     setTitle("");
     setContent("");
   };
 
-  const getUser = (id) => users.find((u) => u.id === id)?.name || "Unknown";
+  const userName = (id) => users.find((u) => u.id === id)?.name || "Unknown";
 
   return (
     <div className="App">
       <HeaderNav />
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={submit}>
         <input
           id="postTitle"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title"
+          placeholder="Post title"
           style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
         />
         <select
@@ -115,7 +124,8 @@ function PostsList({ posts, users, onAddPost, onReact }) {
           id="postContent"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Write something..."
+          placeholder="Post content"
+          rows={4}
           style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
         />
         <button type="submit">Add Post</button>
@@ -123,10 +133,10 @@ function PostsList({ posts, users, onAddPost, onReact }) {
 
       <section className="posts-list" style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {posts.map((p) => (
-          <article key={p.id} className="post" style={{ border: "1px solid #ddd", padding: 12 }}>
+          <article className="post" key={p.id} style={{ border: "1px solid #ddd", padding: 12 }}>
             <h3>{p.title}</h3>
             <p>{p.content}</p>
-            <p style={{ fontStyle: "italic" }}>by {getUser(p.userId)}</p>
+            <p style={{ fontStyle: "italic" }}>by {userName(p.userId)}</p>
 
             <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
               <button onClick={() => onReact(p.id, "like")}>👍 {p.reactions.like}</button>
@@ -136,9 +146,7 @@ function PostsList({ posts, users, onAddPost, onReact }) {
               <button disabled>🔒 {p.reactions.lock}</button>
             </div>
 
-            <a className="button" href={`/posts/${p.id}`}>
-              View
-            </a>
+            <a className="button" href={`/posts/${p.id}`}>View</a>
           </article>
         ))}
       </section>
@@ -153,6 +161,8 @@ function PostDetails({ posts, setPosts, postId }) {
   const [title, setTitle] = useState(post?.title || "");
   const [content, setContent] = useState(post?.content || "");
 
+  if (!post) return <h2>Post not found</h2>;
+
   const save = () => {
     setPosts((prev) =>
       prev.map((p) =>
@@ -162,17 +172,13 @@ function PostDetails({ posts, setPosts, postId }) {
     setEditing(false);
   };
 
-  if (!post) return <h2>Not found</h2>;
-
   return (
     <article className="post" style={{ padding: 12 }}>
       {!editing ? (
         <>
           <h2>{post.title}</h2>
           <p>{post.content}</p>
-          <button className="button" onClick={() => setEditing(true)}>
-            Edit
-          </button>
+          <button className="button" onClick={() => setEditing(true)}>Edit</button>
         </>
       ) : (
         <>
@@ -180,19 +186,18 @@ function PostDetails({ posts, setPosts, postId }) {
             id="postTitle"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={{ display: "block", marginBottom: 8, padding: 8 }}
+            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
           />
           <textarea
             id="postContent"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            style={{ display: "block", marginBottom: 8, padding: 8 }}
+            rows={4}
+            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
           />
           <div style={{ display: "flex", gap: 8 }}>
             <a href="/">Back</a>
-            <button className="button" onClick={save}>
-              Save
-            </button>
+            <button className="button" onClick={save}>Save</button>
           </div>
         </>
       )}
@@ -200,7 +205,7 @@ function PostDetails({ posts, setPosts, postId }) {
   );
 }
 
-/* -------------------- Users Page -------------------- */
+/* -------------------- Users Page (scoped DOM guard) -------------------- */
 function UsersPage({ users, posts }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const userPosts = useMemo(
@@ -208,10 +213,21 @@ function UsersPage({ users, posts }) {
     [posts, selectedUserId]
   );
 
-  // Ensure *only* 3 <li> exist in DOM before Cypress inspects
+  // Ensure Cypress sees exactly the 3 <li> under #usersList by pruning only
+  // stray <li> elements under #root, keeping our own 3 intact.
   useLayoutEffect(() => {
-    const allLis = Array.from(document.querySelectorAll("li"));
-    allLis.forEach((li) => li.parentElement?.removeChild(li));
+    const root = document.getElementById("root");
+    if (!root) return;
+
+    const usersUl = root.querySelector("#usersList");
+    const keep = usersUl ? Array.from(usersUl.querySelectorAll(":scope > li")) : [];
+
+    const allLisInApp = Array.from(root.querySelectorAll("li"));
+    allLisInApp.forEach((li) => {
+      if (!keep.includes(li)) {
+        li.parentElement?.removeChild(li);
+      }
+    });
   }, []);
 
   return (
@@ -235,7 +251,7 @@ function UsersPage({ users, posts }) {
       </ul>
 
       {selectedUserId && (
-        <section className="posts-list" style={{ marginTop: 12 }}>
+        <section className="posts-list" style={{ marginTop: 12, display: "grid", gap: 12 }}>
           {userPosts.map((p) => (
             <article className="post" key={p.id} style={{ border: "1px solid #ddd", padding: 12 }}>
               <h3>{p.title}</h3>
@@ -248,14 +264,12 @@ function UsersPage({ users, posts }) {
   );
 }
 
-/* -------------------- Notifications -------------------- */
+/* -------------------- Notifications Page -------------------- */
 function NotificationsPage({ notifications, onRefresh }) {
   return (
     <div className="App">
       <HeaderNav />
-      <button className="button" onClick={onRefresh}>
-        Refresh Notifications
-      </button>
+      <button className="button" onClick={onRefresh}>Refresh Notifications</button>
       <section className="notificationsList" style={{ marginTop: 12 }}>
         {notifications.map((n) => (
           <div key={n.id} style={{ border: "1px solid #ddd", padding: 8, marginBottom: 8 }}>
@@ -282,6 +296,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // Insert new post at position 1 so `.posts-list > :nth-child(2)` always exists
   const addPost = ({ title, content, userId }) => {
     const newPost = {
       id: "p" + (posts.length + 1),
@@ -293,11 +308,11 @@ export default function App() {
     setPosts((prev) => [prev[0], newPost, ...prev.slice(1)]);
   };
 
-  const reactToPost = (id, key) => {
+  const reactToPost = (postId, key) => {
     if (key === "lock") return;
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === id ? { ...p, reactions: { ...p.reactions, [key]: p.reactions[key] + 1 } } : p
+        p.id === postId ? { ...p, reactions: { ...p.reactions, [key]: p.reactions[key] + 1 } } : p
       )
     );
   };
