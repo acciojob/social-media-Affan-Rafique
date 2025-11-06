@@ -1,0 +1,4 @@
+{
+    "testRepo": "social-media-solution",
+    "pathToFile": "cypress/integration/tests/test.spec.js"
+}
