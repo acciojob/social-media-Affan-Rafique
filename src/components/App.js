@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
 
 /* -------------------- Seed Data -------------------- */
 const seedUsers = [
@@ -8,19 +7,70 @@ const seedUsers = [
   { id: "u3", name: "Charlie" },
 ];
 
-// exactly one initial post so that after adding a post,
-// .posts-list > :nth-child(2) is the new one (Cypress check)
+// exactly one seed post so the newly added post becomes .posts-list > :nth-child(2)
 const seedPosts = [
   {
     id: "p1",
     title: "Welcome to GenZ",
     content: "First post here!",
     userId: "u2",
-    reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 }, // 5 buttons; last (lock) stays 0
+    reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
   },
 ];
 
-/* -------------------- Posts List -------------------- */
+/* -------------------- Tiny Router (no deps) -------------------- */
+// Parse pathname like /posts/p3 → { path: "/posts/:id", params: { id: "p3" } }
+function matchRoute(pathname) {
+  if (pathname === "/") return { key: "home", params: {} };
+  if (pathname === "/users") return { key: "users", params: {} };
+  if (pathname === "/notifications") return { key: "notifications", params: {} };
+  const m = pathname.match(/^\/posts\/([^/]+)$/);
+  if (m) return { key: "post", params: { id: m[1] } };
+  return { key: "notfound", params: {} };
+}
+
+// Navigate without full page reload
+function navigate(href) {
+  if (window.location.pathname === href) return;
+  window.history.pushState({}, "", href);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+// Intercept clicks on internal <a> links
+function useLinkInterceptor() {
+  useEffect(() => {
+    function onClick(e) {
+      // Only left click without modifier keys
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      let a = e.target;
+      while (a && a.tagName !== "A") a = a.parentElement;
+      if (!a) return;
+      const href = a.getAttribute("href");
+      if (!href || href.startsWith("http") || href.startsWith("#") || href.startsWith("mailto:")) return;
+      // same-origin in-app navigation
+      e.preventDefault();
+      navigate(href);
+    }
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+}
+
+/* -------------------- Screens -------------------- */
+function HeaderNav() {
+  return (
+    <header>
+      <h1>GenZ</h1>
+      <nav style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+        {/* exact anchor texts & hrefs required by tests */}
+        <a href="/">Posts</a>
+        <a href="/users">Users</a>
+        <a href="/notifications">Notifications</a>
+      </nav>
+    </header>
+  );
+}
+
 function PostsList({ posts, users, onAddPost, onReact }) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState(users[0]?.id || "");
@@ -31,28 +81,15 @@ function PostsList({ posts, users, onAddPost, onReact }) {
   const submit = (e) => {
     e.preventDefault();
     if (!title.trim() || !author || !content.trim()) return;
-    // push to end (so it becomes :nth-child(2) with our single seed post)
-    onAddPost({
-      title: title.trim(),
-      content: content.trim(),
-      userId: author,
-    });
+    onAddPost({ title: title.trim(), content: content.trim(), userId: author });
     setTitle("");
     setContent("");
   };
 
   return (
     <div className="App">
-      {/* header (first child) — Cypress checks .App > :nth-child(1) exists and h1 text */}
-      <header>
-        <h1>GenZ</h1>
-        <nav style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-          {/* exact anchor texts required */}
-          <Link to="/">Posts</Link>
-          <Link to="/users">Users</Link>
-          <Link to="/notifications">Notifications</Link>
-        </nav>
-      </header>
+      {/* .App > :nth-child(1) must exist; h1 text must be GenZ */}
+      <HeaderNav />
 
       {/* Create Post form (IDs must match) */}
       <section style={{ marginBottom: 16 }}>
@@ -96,7 +133,7 @@ function PostsList({ posts, users, onAddPost, onReact }) {
             <p>{p.content}</p>
             <p style={{ fontStyle: "italic" }}>by {getUserName(p.userId)}</p>
 
-            {/* 5 reaction buttons: first 4 increment, 5th shows 0 and never changes */}
+            {/* 5 reaction buttons; last one fixed at 0 */}
             <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
               <button onClick={() => onReact(p.id, "like")}>👍 {p.reactions.like}</button>
               <button onClick={() => onReact(p.id, "love")}>❤️ {p.reactions.love}</button>
@@ -106,9 +143,7 @@ function PostsList({ posts, users, onAddPost, onReact }) {
             </div>
 
             {/* View button must have class .button and route to /posts/:id */}
-            <Link className="button" to={`/posts/${p.id}`}>
-              View
-            </Link>
+            <a className="button" href={`/posts/${p.id}`}>View</a>
           </article>
         ))}
       </section>
@@ -116,12 +151,8 @@ function PostsList({ posts, users, onAddPost, onReact }) {
   );
 }
 
-/* -------------------- Post Details (view + edit) -------------------- */
-function PostDetails({ posts, setPosts }) {
-  const { postId } = useParams();
-  const navigate = useNavigate();
+function PostDetails({ posts, setPosts, postId }) {
   const post = posts.find((p) => p.id === postId);
-
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(post?.title || "");
   const [content, setContent] = useState(post?.content || "");
@@ -142,9 +173,7 @@ function PostDetails({ posts, setPosts }) {
           <h2>{post.title}</h2>
           <p>{post.content}</p>
           {/* Edit button must be .post > .button */}
-          <button className="button" onClick={() => setEditing(true)}>
-            Edit
-          </button>
+          <button className="button" onClick={() => setEditing(true)}>Edit</button>
         </>
       ) : (
         <>
@@ -161,9 +190,9 @@ function PostDetails({ posts, setPosts }) {
             rows={4}
             style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
           />
-          {/* "last button on the page" saves */}
+          {/* last button saves */}
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => navigate("/")}>Back</button>
+            <a href="/">Back</a>
             <button className="button" onClick={save}>Save</button>
           </div>
         </>
@@ -172,7 +201,6 @@ function PostDetails({ posts, setPosts }) {
   );
 }
 
-/* -------------------- Users Page -------------------- */
 function UsersPage({ users, posts }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const userPosts = useMemo(
@@ -182,27 +210,25 @@ function UsersPage({ users, posts }) {
 
   return (
     <div className="App">
-      <header>
-        <h1>GenZ</h1>
-        <nav style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-          <Link to="/">Posts</Link>
-          <Link to="/users">Users</Link>
-          <Link to="/notifications">Notifications</Link>
-        </nav>
-      </header>
+      <HeaderNav />
 
       {/* Must render exactly 3 <li> items */}
       <ul>
         {users.map((u) => (
           <li key={u.id}>
-            <a href="#" onClick={(e) => { e.preventDefault(); setSelectedUserId(u.id); }}>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setSelectedUserId(u.id);
+              }}
+            >
               {u.name}
             </a>
           </li>
         ))}
       </ul>
 
-      {/* When clicking the 3rd then 2nd li, a .post should appear */}
       {selectedUserId && (
         <section className="posts-list" style={{ marginTop: 12, display: "grid", gap: 12 }}>
           {userPosts.map((p) => (
@@ -217,25 +243,17 @@ function UsersPage({ users, posts }) {
   );
 }
 
-/* -------------------- Notifications Page -------------------- */
 function NotificationsPage({ notifications, onRefresh }) {
   return (
     <div className="App">
-      <header>
-        <h1>GenZ</h1>
-        <nav style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-          <Link to="/">Posts</Link>
-          <Link to="/users">Users</Link>
-          <Link to="/notifications">Notifications</Link>
-        </nav>
-      </header>
+      <HeaderNav />
 
       {/* Refresh button must have class .button */}
       <button className="button" onClick={onRefresh}>
         Refresh Notifications
       </button>
 
-      {/* Must be section.notificationsList and initially empty (no child divs) */}
+      {/* section.notificationsList initially has no divs; after click it does */}
       <section className="notificationsList" style={{ marginTop: 12 }}>
         {notifications.map((n) => (
           <div key={n.id} style={{ border: "1px solid #ddd", padding: 8, marginBottom: 8 }}>
@@ -247,11 +265,20 @@ function NotificationsPage({ notifications, onRefresh }) {
   );
 }
 
-/* -------------------- App Shell with Router -------------------- */
+/* -------------------- App Shell -------------------- */
 export default function App() {
+  useLinkInterceptor();
+
   const [users] = useState(seedUsers);
   const [posts, setPosts] = useState(seedPosts);
   const [notifications, setNotifications] = useState([]); // must start empty
+  const [route, setRoute] = useState(() => matchRoute(window.location.pathname));
+
+  useEffect(() => {
+    const onPop = () => setRoute(matchRoute(window.location.pathname));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const addPost = ({ title, content, userId }) => {
     setPosts((prev) => [
@@ -267,7 +294,7 @@ export default function App() {
   };
 
   const reactToPost = (postId, key) => {
-    if (key === "lock") return; // 5th button must not change (stays 0)
+    if (key === "lock") return; // 5th button must not change
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId ? { ...p, reactions: { ...p.reactions, [key]: p.reactions[key] + 1 } } : p
@@ -276,7 +303,6 @@ export default function App() {
   };
 
   const refreshNotifications = () => {
-    // populate notifications after click (before that, section has no divs)
     const time = new Date().toLocaleTimeString();
     setNotifications([
       { id: "n1", text: `New content available (${time})` },
@@ -284,32 +310,22 @@ export default function App() {
     ]);
   };
 
-  return (
-    <Router>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <PostsList
-              posts={posts}
-              users={users}
-              onAddPost={addPost}
-              onReact={reactToPost}
-            />
-          }
-        />
-        <Route path="/posts/:postId" element={<PostDetails posts={posts} setPosts={setPosts} />} />
-        <Route path="/users" element={<UsersPage users={users} posts={posts} />} />
-        <Route
-          path="/notifications"
-          element={
-            <NotificationsPage
-              notifications={notifications}
-              onRefresh={refreshNotifications}
-            />
-          }
-        />
-      </Routes>
-    </Router>
-  );
+  // Render by route key
+  switch (route.key) {
+    case "home":
+      return <PostsList posts={posts} users={users} onAddPost={addPost} onReact={reactToPost} />;
+    case "users":
+      return <UsersPage users={users} posts={posts} />;
+    case "notifications":
+      return <NotificationsPage notifications={notifications} onRefresh={refreshNotifications} />;
+    case "post":
+      return <PostDetails posts={posts} setPosts={setPosts} postId={route.params.id} />;
+    default:
+      return (
+        <div className="App">
+          <HeaderNav />
+          <h2>Not found</h2>
+        </div>
+      );
+  }
 }
