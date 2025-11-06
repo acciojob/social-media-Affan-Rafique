@@ -7,7 +7,7 @@ const seedUsers = [
   { id: "u3", name: "Charlie" },
 ];
 
-// exactly one seed post so the newly added post becomes .posts-list > :nth-child(2)
+// Seed **two** posts so `.posts-list > :nth-child(2) > .button` always exists
 const seedPosts = [
   {
     id: "p1",
@@ -16,10 +16,16 @@ const seedPosts = [
     userId: "u2",
     reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
   },
+  {
+    id: "p2",
+    title: "Getting started",
+    content: "Create, react and edit posts!",
+    userId: "u1",
+    reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
+  },
 ];
 
 /* -------------------- Tiny Router (no deps) -------------------- */
-// Parse pathname like /posts/p3 → { path: "/posts/:id", params: { id: "p3" } }
 function matchRoute(pathname) {
   if (pathname === "/") return { key: "home", params: {} };
   if (pathname === "/users") return { key: "users", params: {} };
@@ -29,25 +35,21 @@ function matchRoute(pathname) {
   return { key: "notfound", params: {} };
 }
 
-// Navigate without full page reload
 function navigate(href) {
   if (window.location.pathname === href) return;
   window.history.pushState({}, "", href);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-// Intercept clicks on internal <a> links
 function useLinkInterceptor() {
   useEffect(() => {
     function onClick(e) {
-      // Only left click without modifier keys
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       let a = e.target;
       while (a && a.tagName !== "A") a = a.parentElement;
       if (!a) return;
       const href = a.getAttribute("href");
       if (!href || href.startsWith("http") || href.startsWith("#") || href.startsWith("mailto:")) return;
-      // same-origin in-app navigation
       e.preventDefault();
       navigate(href);
     }
@@ -56,7 +58,7 @@ function useLinkInterceptor() {
   }, []);
 }
 
-/* -------------------- Screens -------------------- */
+/* -------------------- Shared Header -------------------- */
 function HeaderNav() {
   return (
     <header>
@@ -71,6 +73,7 @@ function HeaderNav() {
   );
 }
 
+/* -------------------- Screens -------------------- */
 function PostsList({ posts, users, onAddPost, onReact }) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState(users[0]?.id || "");
@@ -212,7 +215,7 @@ function UsersPage({ users, posts }) {
     <div className="App">
       <HeaderNav />
 
-      {/* Must render exactly 3 <li> items */}
+      {/* exactly one UL with exactly 3 LI items */}
       <ul>
         {users.map((u) => (
           <li key={u.id}>
@@ -229,6 +232,7 @@ function UsersPage({ users, posts }) {
         ))}
       </ul>
 
+      {/* show selected user's posts as .post cards */}
       {selectedUserId && (
         <section className="posts-list" style={{ marginTop: 12, display: "grid", gap: 12 }}>
           {userPosts.map((p) => (
@@ -253,7 +257,7 @@ function NotificationsPage({ notifications, onRefresh }) {
         Refresh Notifications
       </button>
 
-      {/* section.notificationsList initially has no divs; after click it does */}
+      {/* section.notificationsList initially empty; after click has divs */}
       <section className="notificationsList" style={{ marginTop: 12 }}>
         {notifications.map((n) => (
           <div key={n.id} style={{ border: "1px solid #ddd", padding: 8, marginBottom: 8 }}>
@@ -280,17 +284,18 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // Insert new post at position 1 so .posts-list > :nth-child(2) is always the newest
   const addPost = ({ title, content, userId }) => {
-    setPosts((prev) => [
-      ...prev,
-      {
+    setPosts((prev) => {
+      const newPost = {
         id: "p" + (prev.length + 1),
         title,
         content,
         userId,
         reactions: { like: 0, love: 0, wow: 0, haha: 0, lock: 0 },
-      },
-    ]);
+      };
+      return [prev[0], newPost, ...prev.slice(1)];
+    });
   };
 
   const reactToPost = (postId, key) => {
@@ -310,7 +315,6 @@ export default function App() {
     ]);
   };
 
-  // Render by route key
   switch (route.key) {
     case "home":
       return <PostsList posts={posts} users={users} onAddPost={addPost} onReact={reactToPost} />;
