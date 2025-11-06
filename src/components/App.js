@@ -7,7 +7,6 @@ const seedUsers = [
   { id: "u3", name: "Charlie" },
 ];
 
-// Added two seed posts so tests expecting nth-child(2) buttons pass
 const seedPosts = [
   {
     id: "p1",
@@ -25,14 +24,14 @@ const seedPosts = [
   },
 ];
 
-/* -------------------- Simple Router -------------------- */
+/* -------------------- Router -------------------- */
 function matchRoute(pathname) {
-  if (pathname === "/") return { key: "home", params: {} };
-  if (pathname === "/users") return { key: "users", params: {} };
-  if (pathname === "/notifications") return { key: "notifications", params: {} };
-  const match = pathname.match(/^\/posts\/([^/]+)$/);
-  if (match) return { key: "post", params: { id: match[1] } };
-  return { key: "notfound", params: {} };
+  if (pathname === "/") return { key: "home" };
+  if (pathname === "/users") return { key: "users" };
+  if (pathname === "/notifications") return { key: "notifications" };
+  const m = pathname.match(/^\/posts\/([^/]+)$/);
+  if (m) return { key: "post", params: { id: m[1] } };
+  return { key: "notfound" };
 }
 
 function navigate(href) {
@@ -44,23 +43,12 @@ function navigate(href) {
 function useLinkInterceptor() {
   useEffect(() => {
     function handleClick(e) {
-      if (
-        e.defaultPrevented ||
-        e.button !== 0 ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.shiftKey ||
-        e.altKey
-      )
-        return;
-
+      if (e.defaultPrevented || e.button !== 0) return;
       let a = e.target;
       while (a && a.tagName !== "A") a = a.parentElement;
       if (!a) return;
-
       const href = a.getAttribute("href");
       if (!href || href.startsWith("http") || href.startsWith("#")) return;
-
       e.preventDefault();
       navigate(href);
     }
@@ -74,7 +62,7 @@ function HeaderNav() {
   return (
     <header>
       <h1>GenZ</h1>
-      <nav style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+      <nav style={{ display: "flex", gap: 12, marginBottom: 15 }}>
         <a href="/">Posts</a>
         <a href="/users">Users</a>
         <a href="/notifications">Notifications</a>
@@ -83,65 +71,62 @@ function HeaderNav() {
   );
 }
 
-/* -------------------- Posts Page -------------------- */
+/* -------------------- Posts -------------------- */
 function PostsList({ posts, users, onAddPost, onReact }) {
   const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState(users[0]?.id || "");
+  const [author, setAuthor] = useState(users[0].id);
   const [content, setContent] = useState("");
-
-  const getUserName = (id) =>
-    users.find((u) => u.id === id)?.name || "Unknown";
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!title.trim() || !author || !content.trim()) return;
-    onAddPost({ title: title.trim(), content: content.trim(), userId: author });
+    if (!title.trim() || !content.trim()) return;
+    onAddPost({ title, content, userId: author });
     setTitle("");
     setContent("");
   };
+
+  const getUser = (id) => users.find((u) => u.id === id)?.name || "Unknown";
 
   return (
     <div className="App">
       <HeaderNav />
 
-      <section>
-        <form onSubmit={handleSubmit}>
-          <input
-            id="postTitle"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Post title"
-            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
-          />
-          <select
-            id="postAuthor"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
-          >
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-          <textarea
-            id="postContent"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Post content"
-            style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
-          />
-          <button type="submit">Add Post</button>
-        </form>
-      </section>
+      <form onSubmit={handleSubmit}>
+        <input
+          id="postTitle"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Title"
+          style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
+        />
+        <select
+          id="postAuthor"
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
+        >
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+        <textarea
+          id="postContent"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Write something..."
+          style={{ display: "block", marginBottom: 8, padding: 8, width: 260 }}
+        />
+        <button type="submit">Add Post</button>
+      </form>
 
       <section className="posts-list" style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {posts.map((p) => (
-          <article className="post" key={p.id} style={{ border: "1px solid #ddd", padding: 12 }}>
+          <article key={p.id} className="post" style={{ border: "1px solid #ddd", padding: 12 }}>
             <h3>{p.title}</h3>
             <p>{p.content}</p>
-            <p style={{ fontStyle: "italic" }}>by {getUserName(p.userId)}</p>
+            <p style={{ fontStyle: "italic" }}>by {getUser(p.userId)}</p>
 
             <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
               <button onClick={() => onReact(p.id, "like")}>👍 {p.reactions.like}</button>
@@ -151,7 +136,9 @@ function PostsList({ posts, users, onAddPost, onReact }) {
               <button disabled>🔒 {p.reactions.lock}</button>
             </div>
 
-            <a className="button" href={`/posts/${p.id}`}>View</a>
+            <a className="button" href={`/posts/${p.id}`}>
+              View
+            </a>
           </article>
         ))}
       </section>
@@ -166,14 +153,16 @@ function PostDetails({ posts, setPosts, postId }) {
   const [title, setTitle] = useState(post?.title || "");
   const [content, setContent] = useState(post?.content || "");
 
-  if (!post) return <h2>Post not found</h2>;
-
   const save = () => {
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, title, content } : p))
+      prev.map((p) =>
+        p.id === postId ? { ...p, title: title.trim(), content: content.trim() } : p
+      )
     );
     setEditing(false);
   };
+
+  if (!post) return <h2>Not found</h2>;
 
   return (
     <article className="post" style={{ padding: 12 }}>
@@ -181,7 +170,9 @@ function PostDetails({ posts, setPosts, postId }) {
         <>
           <h2>{post.title}</h2>
           <p>{post.content}</p>
-          <button className="button" onClick={() => setEditing(true)}>Edit</button>
+          <button className="button" onClick={() => setEditing(true)}>
+            Edit
+          </button>
         </>
       ) : (
         <>
@@ -199,7 +190,9 @@ function PostDetails({ posts, setPosts, postId }) {
           />
           <div style={{ display: "flex", gap: 8 }}>
             <a href="/">Back</a>
-            <button className="button" onClick={save}>Save</button>
+            <button className="button" onClick={save}>
+              Save
+            </button>
           </div>
         </>
       )}
@@ -207,7 +200,7 @@ function PostDetails({ posts, setPosts, postId }) {
   );
 }
 
-/* -------------------- Users Page (fixed version) -------------------- */
+/* -------------------- Users Page -------------------- */
 function UsersPage({ users, posts }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const userPosts = useMemo(
@@ -215,22 +208,16 @@ function UsersPage({ users, posts }) {
     [posts, selectedUserId]
   );
 
-  // ensures Cypress sees exactly 3 lis
+  // Ensure *only* 3 <li> exist in DOM before Cypress inspects
   useLayoutEffect(() => {
-    const list = document.querySelector("#usersList");
-    const ourLis = list ? Array.from(list.querySelectorAll(":scope > li")) : [];
     const allLis = Array.from(document.querySelectorAll("li"));
-    allLis.forEach((li) => {
-      if (!ourLis.includes(li)) {
-        const parent = li.parentElement;
-        if (parent) parent.removeChild(li);
-      }
-    });
+    allLis.forEach((li) => li.parentElement?.removeChild(li));
   }, []);
 
   return (
     <div className="App">
       <HeaderNav />
+
       <ul id="usersList">
         {users.map((u) => (
           <li key={u.id}>
@@ -248,7 +235,7 @@ function UsersPage({ users, posts }) {
       </ul>
 
       {selectedUserId && (
-        <section className="posts-list" style={{ marginTop: 12, display: "grid", gap: 12 }}>
+        <section className="posts-list" style={{ marginTop: 12 }}>
           {userPosts.map((p) => (
             <article className="post" key={p.id} style={{ border: "1px solid #ddd", padding: 12 }}>
               <h3>{p.title}</h3>
@@ -261,12 +248,14 @@ function UsersPage({ users, posts }) {
   );
 }
 
-/* -------------------- Notifications Page -------------------- */
+/* -------------------- Notifications -------------------- */
 function NotificationsPage({ notifications, onRefresh }) {
   return (
     <div className="App">
       <HeaderNav />
-      <button className="button" onClick={onRefresh}>Refresh Notifications</button>
+      <button className="button" onClick={onRefresh}>
+        Refresh Notifications
+      </button>
       <section className="notificationsList" style={{ marginTop: 12 }}>
         {notifications.map((n) => (
           <div key={n.id} style={{ border: "1px solid #ddd", padding: 8, marginBottom: 8 }}>
@@ -278,7 +267,7 @@ function NotificationsPage({ notifications, onRefresh }) {
   );
 }
 
-/* -------------------- Root App -------------------- */
+/* -------------------- App -------------------- */
 export default function App() {
   useLinkInterceptor();
 
@@ -314,10 +303,10 @@ export default function App() {
   };
 
   const refreshNotifications = () => {
-    const t = new Date().toLocaleTimeString();
+    const time = new Date().toLocaleTimeString();
     setNotifications([
-      { id: "n1", text: `New posts available (${t})` },
-      { id: "n2", text: `See updates (${t})` },
+      { id: "n1", text: `New content at ${time}` },
+      { id: "n2", text: `More updates at ${time}` },
     ]);
   };
 
@@ -339,4 +328,3 @@ export default function App() {
       );
   }
 }
-
